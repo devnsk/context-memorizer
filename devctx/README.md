@@ -51,6 +51,7 @@ devctx resume
 |---------|-------------|
 | `devctx init` | Initialize DevContext in current repo |
 | `devctx save [msg]` | Save context (interactive or quick mode) |
+| `devctx save --auto` | Auto-save context from agent/editor logs (non-interactive) |
 | `devctx resume` | Generate AI prompt & copy to clipboard |
 | `devctx log` | View context history for current branch |
 | `devctx diff` | Show changes since last context save |
