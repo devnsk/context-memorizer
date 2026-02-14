@@ -263,6 +263,34 @@ async function extractFromAntigravity(
             task = titleMatch[1].trim();
         }
 
+        // Proposed changes sections often contain file lists - WE WANT TO IGNORE THESE
+        // Instead, look for "Important" or "Note" alerts which contain architectural decisions
+        const alertMatches = plan.matchAll(/>\s*\[!(?:IMPORTANT|NOTE|WARNING|CAUTION)\]\s*\n((?:>\s*.*?\n)+)/gi);
+        for (const match of alertMatches) {
+            const alertText = match[1].replace(/^>\s*/gm, "").replace(/\*\*/g, "").trim();
+            if (alertText.length > 20) {
+                // Split into sentences and keep robust ones
+                const sentences = alertText.split(/(\. |\n)/).filter(s => s.length > 20);
+                decisions.push(...sentences.map(s => s.trim()));
+            }
+        }
+
+        // Also look for bullet points in text that explain "why" (filtering out file links)
+        const bulletPoints = plan.matchAll(/^-\s+(.+?)$/gm);
+        for (const match of bulletPoints) {
+            const text = match[1].trim();
+            // Ignore file links or simple task lists
+            if (text.startsWith("[") || text.includes("](file://")) continue;
+
+            const sentences = text.split(/(\. |\n)/).filter(s => s.length > 20);
+            for (const sentence of sentences) {
+                // Use more flexible matching for decision verbs (decided, choosing, etc.)
+                if (sentence.match(/\b(decid|chos|opt|select|prefer|us(?:e|ing)|going with|approach|architect|pattern|instead of)/i)) {
+                    const cleaned = sentence.trim();
+                    if (cleaned.length > 20) decisions.push(cleaned);
+                }
+            }
+        }
         // Overview/description section captures the WHY
         const overviewMatch = plan.match(/##\s*(?:Overview|Context|Background)\s*\n([\s\S]*?)(?=\n##|$)/i);
         if (overviewMatch) {
@@ -272,12 +300,13 @@ async function extractFromAntigravity(
             }
         }
 
-        // Proposed changes sections capture decisions
-        const decisionPatterns = plan.match(/####\s*\[.*?\]\s*\[(.+?)\]/gm) || [];
-        for (const d of decisionPatterns.slice(0, 5)) {
-            const fileName = d.match(/\[([^\]]+)\]\s*$/)?.[1]?.trim();
-            if (fileName) decisions.push(`Modified: ${fileName}`);
-        }
+        // Proposed changes sections capture decisions - OLD LOGIC DEPRECATED
+        // We now rely on Alerts and specific text patterns above
+        // const decisionPatterns = plan.match(/####\s*\[.*?\]\s*\[(.+?)\]/gm) || [];
+        // for (const d of decisionPatterns.slice(0, 5)) {
+        //    const fileName = d.match(/\[([^\]]+)\]\s*$/)?.[1]?.trim();
+        //    if (fileName) decisions.push(`Modified: ${fileName}`);
+        // }
     }
 
     // 2. Try metadata.json files for stored summaries
@@ -430,19 +459,20 @@ function extractDecisions(messages: string[]): string[] {
     ];
 
     for (const msg of messages.slice(-10)) {
-        for (const pattern of patterns) {
-            pattern.lastIndex = 0;
-            let match: RegExpExecArray | null;
-            while ((match = pattern.exec(msg)) !== null) {
-                const d = match[0].trim();
-                if (d.length > 10 && d.length < 200 && !decisions.includes(d)) {
-                    decisions.push(d);
+        const sentences = msg.split(/[.!?]\s+/);
+        for (const sentence of sentences) {
+            // Use more flexible matching for decision verbs (decided, choosing, etc.)
+            if (sentence.match(/\b(decid|chos|opt|select|prefer|us(?:e|ing)|going with|approach|architect|pattern|instead of)/i)) {
+                const cleaned = sentence.trim();
+                // Avoid very short fragments
+                if (cleaned.length > 20 && cleaned.length < 300 && !decisions.includes(cleaned)) {
+                    decisions.push(cleaned);
                 }
             }
         }
     }
 
-    return decisions.slice(0, 8);
+    return decisions.slice(0, 10);
 }
 
 function extractApproaches(messages: string[]): string[] {
@@ -510,7 +540,7 @@ function extractTaskFromMarkdown(content: string): string {
 
 function extractIncompleteItems(content: string): string[] {
     const items: string[] = [];
-    const matches = content.matchAll(/\[\s\]\s+(.+)$/gm);
+    const matches = content.matchAll(/-\s+\[\s\]\s+(.+)$/gm);
     for (const m of matches) {
         items.push(m[1].trim());
     }
@@ -519,7 +549,7 @@ function extractIncompleteItems(content: string): string[] {
 
 function extractCompletedItems(content: string): string[] {
     const items: string[] = [];
-    const matches = content.matchAll(/\[x\]\s+(.+)$/gm);
+    const matches = content.matchAll(/-\s+\[x\]\s+(.+)$/gm);
     for (const m of matches) {
         items.push(m[1].trim());
     }

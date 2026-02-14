@@ -34,13 +34,19 @@ const server = new McpServer({
 
 // --- Tools ---
 
+interface ResumeArgs {
+    branch?: string;
+}
+
+const resumeSchema = {
+    branch: z.string().optional().describe("Branch name to resume. Defaults to current branch."),
+};
+
 server.tool(
     "devctx_resume",
     "Generate AI-ready context prompt for the current or specified branch",
-    {
-        branch: z.string().optional().describe("Branch name to resume. Defaults to current branch."),
-    },
-    async ({ branch }) => {
+    resumeSchema as any,
+    async ({ branch }: ResumeArgs) => {
         if (!(await isInitialized())) {
             return { content: [{ type: "text" as const, text: "DevContext not initialized. Run `devctx init` first." }] };
         }
@@ -59,18 +65,29 @@ server.tool(
     }
 );
 
+interface SaveArgs {
+    message: string;
+    goal?: string;
+    approaches?: string[];
+    decisions?: string[];
+    currentState?: string;
+    nextSteps?: string[];
+}
+
+const saveSchema = {
+    message: z.string().describe("Description of what you were working on"),
+    goal: z.string().optional().describe("Goal or ticket reference"),
+    approaches: z.array(z.string()).optional().describe("Approaches tried"),
+    decisions: z.array(z.string()).optional().describe("Key decisions made"),
+    currentState: z.string().optional().describe("Current state of the work"),
+    nextSteps: z.array(z.string()).optional().describe("Next steps"),
+};
+
 server.tool(
     "devctx_save",
     "Save current coding context with a message",
-    {
-        message: z.string().describe("Description of what you were working on"),
-        goal: z.string().optional().describe("Goal or ticket reference"),
-        approaches: z.array(z.string()).optional().describe("Approaches tried"),
-        decisions: z.array(z.string()).optional().describe("Key decisions made"),
-        currentState: z.string().optional().describe("Current state of the work"),
-        nextSteps: z.array(z.string()).optional().describe("Next steps"),
-    },
-    async ({ message, goal, approaches, decisions, currentState, nextSteps }) => {
+    saveSchema as any,
+    async ({ message, goal, approaches, decisions, currentState, nextSteps }: SaveArgs) => {
         if (!(await isInitialized())) {
             return { content: [{ type: "text" as const, text: "DevContext not initialized. Run `devctx init` first." }] };
         }
@@ -114,14 +131,21 @@ server.tool(
     }
 );
 
+interface LogArgs {
+    all?: boolean;
+    count?: number;
+}
+
+const logSchema = {
+    all: z.boolean().optional().describe("Show all branches"),
+    count: z.number().optional().describe("Number of entries to show"),
+};
+
 server.tool(
     "devctx_log",
     "View context history for the current branch or all branches",
-    {
-        all: z.boolean().optional().describe("Show all branches"),
-        count: z.number().optional().describe("Number of entries to show"),
-    },
-    async ({ all, count }) => {
+    logSchema as any,
+    async ({ all, count }: LogArgs) => {
         if (!(await isInitialized())) {
             return { content: [{ type: "text" as const, text: "DevContext not initialized." }] };
         }
